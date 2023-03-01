@@ -1,21 +1,22 @@
 package server;
 
 import log.LogRecord;
-import log.OperationType;
-import log.ServerStart;
-import stringmsg.StringMessage;
+import stringmsg.BuildStringMessage;
+import talkshow.ExitCode;
 import talkshow.Message;
+import user.ActiveUser;
 
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
-import java.io.PrintWriter;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.util.GregorianCalendar;
 import java.util.concurrent.*;
 
 import static talkshow.ExitCode.SERVER_NOT_INITIALIZE;
 import static talkshow.ExitCode.SUCCESS;
+import static talkshow.MessageType.START_SERVER;
 
 /**
  * @author gntsi
@@ -27,21 +28,11 @@ public class Server {
     /**
      * —писок запущенных задач по обработке сообщений участников чата.
      */
-    private static ServerSocket serverSocket;
-    // очередь необработанных сообщений
-    public static final int ABQ_CAPACITY = 10;
-    public static final ArrayBlockingQueue<StringMessage> stringMessages = new ArrayBlockingQueue<>(ABQ_CAPACITY);
+    private ServerSocket serverSocket;
+    private BufferedReader serverInSocket;
+    private BufferedReader serverOutSocket;
 
-    public static final ArrayBlockingQueue<Future<StringMessage>> readMessageTask = new ArrayBlockingQueue<>(ABQ_CAPACITY);
-    public static final ArrayBlockingQueue<Future<Message>> parseMessageTask = new ArrayBlockingQueue<>(ABQ_CAPACITY);
-    public static final ArrayBlockingQueue<Future<Message>> sendMessageTask = new ArrayBlockingQueue<>(ABQ_CAPACITY);
-    public static final ArrayBlockingQueue<Future<Message>> sendLogTask = new ArrayBlockingQueue<>(ABQ_CAPACITY);
-
-    private final LogRecord log = new ServerStart();
-    /**
-     * ѕул потоков.
-     */
-    public static ExecutorService threadPool;
+    private final LogRecord log = new LogRecord();
 
     public Server() {
     }
@@ -51,58 +42,56 @@ public class Server {
      * использование адреса.
      * ¬ случае неудачной инициализации выводим ошибку и завершаем работу.
      */
-    public void runServer(int port, int reuseaddr) throws InterruptedException {
+    public void runServer(int port, int reuseaddr) throws InterruptedException, ExecutionException {
 
-        try (ServerSocket servSocket = new ServerSocket(port, reuseaddr)) {
+        try {
+            ServerSocket servSocket = new ServerSocket(port, reuseaddr);
+
             serverSocket = servSocket;
-            SUCCESS.resultMessage(SUCCESS);
-            log.formLogRecord(OperationType.START_SERVER, null, SUCCESS);
+            System.out.println("—ервер запущен");
+            System.out.println(ExitCode.toString(SUCCESS));
+            ThreadService.prepareMessagesLog.put(serverStartMessage(SUCCESS));
+            log.formLogRecord();
+            runClientSocket();
+
         } catch (RuntimeException | IOException e) {
-            log.formLogRecord(OperationType.START_SERVER, null, SERVER_NOT_INITIALIZE);
-            SERVER_NOT_INITIALIZE.resultMessage(SERVER_NOT_INITIALIZE);
+            ThreadService.prepareMessagesLog.put(serverStartMessage(SERVER_NOT_INITIALIZE));
+            log.formLogRecord();
+            System.out.println(ExitCode.toString(SERVER_NOT_INITIALIZE));
             throw new RuntimeException(e);
-        } catch (InterruptedException e) {
+        } catch (InterruptedException | ExecutionException e) {
             throw new RuntimeException(e);
         }
+    }
+
+    private Message serverStartMessage(ExitCode code) {
+        Message message = new Message();
+        message.setDataOfMessage(new GregorianCalendar().getTime());
+        message.setType(START_SERVER);
+        message.setResult(code);
+        return message;
     }
 
     /**
      * »нициализируем клиентский сокет, помещаем его в пул потоков и переходим в ожидание сообщений от участников
      * чата.
      */
-    public void runClientSocket() throws InterruptedException {
+    public void runClientSocket() throws IOException, InterruptedException, ExecutionException {
 
-        Callable<StringMessage> userMessage = () -> {
-
-            StringMessage clientMessage;
-            clientMessage = new StringMessage();
-
-            try (Socket clientSocket = serverSocket.accept();
-                 PrintWriter out = new PrintWriter(clientSocket.getOutputStream(), true);
-                 BufferedReader in = new BufferedReader(new InputStreamReader(clientSocket.getInputStream()))
-            ) {
-                clientMessage.setInputCanal(in);
-                clientMessage.setOutputCanal(out);
-                clientMessage.setMessage(in.readLine());
-
-            } catch (IOException e) {
-                throw new RuntimeException(e);
-            }
-            return clientMessage;
-        };
-
-        Future<StringMessage> taskReadMessage = threadPool.submit(userMessage);
-        readMessageTask.put(taskReadMessage);
+        while (true) {
+            Socket clientSocket = serverSocket.accept();
+            //—начала регистрируем и коннектим нового участника, а потом
+            // запускаем отдельный поток по работе с участником
+            ActiveUser activeUser = new ActiveUser(clientSocket);
+            serverInSocket = new BufferedReader(new InputStreamReader(clientSocket.getInputStream()));
+            activeUser.runUserThreadIn();
+        }
     }
 
+    public void sendChatMessage(BuildStringMessage message) throws InterruptedException, ExecutionException {
+        ActiveUser activeUser = new ActiveUser(message.getRecipientSocket());
+        activeUser.runUserThreadOut(message.getBuildMessage());
 
-
-    /**
-     * »нициализируем пул потоков.
-     */
-    public void initPoolThreads(int threadsNumber) {
-         threadPool = Executors.newFixedThreadPool(threadsNumber);
+        new ThreadService().controlOutTask();
     }
-
-
 }

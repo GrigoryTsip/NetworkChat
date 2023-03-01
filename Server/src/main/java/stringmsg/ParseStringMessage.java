@@ -1,215 +1,166 @@
+//
+// Source code recreated from a .class file by IntelliJ IDEA
+// (powered by FernFlower decompiler)
+//
+
 package stringmsg;
 
-import log.ExitChat;
-import log.SendMessage;
 import server.IDFactory;
 import server.Settings;
-import talkshow.ExitCode;
 import talkshow.Message;
+import talkshow.MessageFactory;
 import talkshow.MessageType;
-import talkshow.TalkShow;
-import user.User;
 
 import java.text.ParseException;
+import java.util.ArrayList;
 import java.util.Date;
-import java.util.concurrent.ConcurrentHashMap;
 
-import static server.Server.stringMessages;
-import static server.Settings.formatter;
-import static talkshow.MessageType.*;
-
-/**
- * Класс, выполняющий операции разбора строки поступившего сообщения.
- *
- * @author gntsi
- * @version 1.0
- * @updated 02-фев-2023 10:37:31
- */
 public class ParseStringMessage {
-
-    private final long idParseStringMessage;
-    /**
-     * Поле даты сообщения в формате Date.
-     */
-    private Date messageData;
-    /**
-     * Идентифицированная беседа, полученная в сообщении.
-     */
-    private TalkShow talk;
-    private User sender;
-
-    /**
-     * Адресаты сообщения - массив ников.
-     */
-    private ConcurrentHashMap<String, User> recipients;
-    /**
-     * Неопознанные или незарегистрированные получатели.
-     */
+    private long idParseStringMessage;
+    private Date messageData = new Date();
+    private String[] recipients;
     private String recipientsWrong;
-
-    /**
-     * Неактивные получатели.
-     */
-    private String recipientsNoArtive;
-
-    String senderNick;
-    String messageBody;
-    private long talkID;
-    protected String currentMessage;
-    /**
-     * Адресаты сообщения, которых нет в чате.
-     */
     private String recipientsNoActive;
+    protected String senderNick;
+    protected long talkID;
+    protected String talkOwner;
+    protected String messageBlocType;
+    protected String messageBlocData;
+    protected String messageBlocTalk;
+    protected String messageBlocSender;
+    protected String messageBlocRecipients;
+    protected String messageBlocExit;
+    protected String messageBlocBody;
 
-    public ParseStringMessage() throws InterruptedException {
+    public ParseStringMessage() {
+    }
+
+    public ParseStringMessage(StringMessage strMsg) {
         IDFactory idFactory = new IDFactory();
-        idParseStringMessage = idFactory.buildID(this);
+        this.idParseStringMessage = idFactory.buildID(this);
+        idFactory.objectConnection(strMsg.getStringMessageID(), this.idParseStringMessage);
     }
 
-    /**
-     * Поле даты сообщения в формате Date.
-     */
     public Date getMessageBloc() {
-        return messageData;
+        return this.messageData;
     }
 
-    /**
-     * Идентифицированная беседа, полученная в сообщении.
-     */
-    public TalkShow getTalk() {
-        return this.talk;
-    }
-
-    public User getSender() {
-        return this.sender;
-    }
-
-    /**
-     * Адресаты сообщения - массив ников.
-     */
-    public ConcurrentHashMap<String, User> getRecipients() {
+    public String[] getRecipients() {
         return this.recipients;
     }
+    public String getTalkOwner() {
+        return this.talkOwner;
+    }
 
-    /**
-     * Неопознанные или незарегистрированные получатели.
-     */
     public String getRecipientsWrong() {
         return this.recipientsWrong;
     }
 
-    /**
-     * Адресаты сообщения, которых нет в чате.
-     */
+    protected void setRecipientsWrong(String newVal) {
+        this.recipientsWrong = newVal;
+    }
+
     public String getRecipientsNoActive() {
         return this.recipientsNoActive;
     }
 
-    /**
-     * Адресаты сообщения, которых нет в чате.
-     */
+    protected void setRecipientsNoActive(String newVal) {
+        this.recipientsNoActive = newVal;
+    }
+
     public long getIDParseStringMessage() {
         return this.idParseStringMessage;
     }
 
-    /**
-     * Разобрать строку сообщения и первично сформировать объект Message.
-     */
-    public Message parseMessage(StringMessage currentMessage) throws ParseException, InterruptedException {
+    public Message parseMessage(StringMessage currentMessage) {
 
-        Settings set = new Settings();
         Message mesg = new Message();
-        String[] recipArray;
-
         /*
         Подстроки сообщения - массив блоков.
-        messageBloc[1] - дата в едином формате, заданном в Settings;
-        messageBloc[2] - идентификатор беседы или код ошибки;
-        messageBloc[3] - ник отправителя;
-        messageBloc[4] - список ников получателей;
-        messageBloc[5] - тело сообщения.
+        messageBloc[1] - тип сообщения;
+        messageBloc[2] - дата;
+        messageBloc[3] - ник владельца беседы;
+        messageBloc[4] - ник отправителя;
+        messageBloc[5] - список ников получателей;
+        messageBloc[6] - тело сообщения;
+        messageBloc[7] - код завершения.
          */
-        String[] messageBloc = currentMessage.getMessage().split(set.getMessageSeparator());
+        mesStringParse(currentMessage.getMessage());
+
+        MessageFactory msgFactory = new MessageFactory();
+        msgFactory.setType(mesg, MessageType.valueOf(this.messageBlocType));
+
         try {
-            messageData = formatter.parse(messageBloc[1]);
-            mesg.setDataOfMessage(messageData);
-        } catch (ParseException ignored) {
+            this.messageData = Settings.formatter.parse(this.messageBlocData);
+            msgFactory.setData(mesg, this.messageData);
+        } catch (ParseException e) {
+            System.out.println(e);
         }
 
-        mesg.setIDStringMessage(currentMessage.getStringMessageID());
-        mesg.setDirection(true);
+        msgFactory.setStringMessage(mesg, currentMessage.getStringMessageID());
+        msgFactory.setDirection(mesg, true);
+        if (!this.messageBlocTalk.isEmpty()) {
+            this.talkOwner = this.messageBlocTalk;
+            //this.talkID = Long.parseLong(this.messageBlocTalk);
+        } else this.talkOwner = null;
+        this.senderNick = this.messageBlocSender;
 
-        talkID = Long.parseLong(messageBloc[2]);
-        senderNick = messageBloc[3];
-
-        recipArray = messageBloc[4].split(";");
-        messageBody = messageBloc[5];
-        mesg.setBody(messageBody);
-
-        /*
-        Проверяем тип сообщения:
-            Регистрация (CHAT_REGISTRATION) :
-                ИД беседы - пустое;
-                есть ник отправителя;
-                список получателей - пустой;
-                в теле сообщения - имя регистрируемого не более 30 символов.
-
-              Коннект (CHAT_CONNECTION) :
-                ИД беседы  - пустое;
-                есть ник отправителя;
-                список получателей - пустой;
-                в теле сообщения - пусто.
-
-              Сообщение о выходе из чата (EXIT_THE_CHAT):
-                ИД беседы  - пустое;
-                есть ник отправителя;
-                список получателей - пустой;
-                в теле сообщения "/exit".
-
-              Обычное сообщение адресату (MESSAGE_TO_ADDRESSEE):
-                в поле ИД беседы - целое неотрицательное число больше 1
-                (зарезервирована как код успешного завершения);
-                ник отправителя - начинается с @ и не более 12 символов;
-                список ников получателей; требования к нику такие же, разделены
-                "точкой с запятой";
-                поле тела сообщения может быть пустым.
-        */
-
-        boolean ctrlMessage = (talkID == 0);
-        MessageType type;
-        if (ctrlMessage) {
-            type = (messageBody.equals("")) ? CHAT_CONNECTION : CHAT_REGISTRATION;
-            type = (messageBody.equals("/exit")) ? EXIT_THE_CHAT : type;
-        } else {
-            type = (talkID > 1) ? MESSAGE_TO_ADDRESSEE : ERROR_MESSAGE;
-        }
-
-        // Проверяем формат переданного сообщения
-        ExitCode exitCode;
-        switch (type) {
-            case CHAT_REGISTRATION -> mesg = new ChatRegistration().senderRegistration(mesg);
-            case CHAT_CONNECTION -> mesg = new ChatConnection().senderConnection(mesg, currentMessage);
-            case EXIT_THE_CHAT -> mesg = new ExitChat().exitChat();
-            case MESSAGE_TO_ADDRESSEE -> mesg = new MessageToAddressee().sendToAddressee(mesg);
-            case ERROR_MESSAGE -> mesg = new ErrorMessage().sendErrorMessage(mesg);
+        switch (mesg.getType()) {
+            case CHAT_REGISTRATION -> mesg = (new ChatRegistration(this)).senderRegistration(mesg);
+            case CHAT_CONNECTION -> mesg = (new ChatConnection(this)).senderConnection(mesg);
+            case EXIT_THE_CHAT -> mesg = (new ExitTheChat()).exitTheChat(mesg);
+            case RECEIVED_MESSAGE -> mesg = (new ReceivedMessage(this)).sendToAddressee(mesg);
             default -> System.out.println("Неверный тип сообщения");
         }
+
         return mesg;
     }
 
+    public void mesStringParse(String mes) {
+        if (mes != null) {
+            String[] messageBloc = mes.split((new Settings()).getMessageSeparator());
+
+            int blocSize = messageBloc.length;
+            int frstID = 1;
+            this.messageBlocType = messageBloc[frstID++];
+            this.messageBlocData = messageBloc[frstID++];
+            this.messageBlocTalk = messageBloc[frstID++];
+            this.messageBlocSender = messageBloc[frstID++];
+            if (blocSize > frstID) this.messageBlocRecipients = messageBloc[frstID++];
+            if (this.messageBlocRecipients != null)
+                this.recipients = this.messageBlocRecipients.split(";");
+            if (blocSize > frstID) this.messageBlocBody = messageBloc[frstID++];
+            if (blocSize > frstID) this.messageBlocExit = messageBloc[frstID];
+        }
+    }
+
     public boolean checkSenderNick(String senderNick) {
-        return (senderNick.indexOf("@") != 0);
+        return senderNick.indexOf("@") == 0;
     }
 
-    public boolean checkSenderName(String senderNick) {
-        return (senderNick.isEmpty()) || (senderNick.indexOf("@") == 0) || (senderNick.length() > 30);
+    public String getMessageBody() {
+        return this.messageBlocBody;
     }
 
-    private boolean checkConnectionFormat(String senderNick) {
-        return true;
+    public String getSenderNick() {
+        return this.senderNick;
     }
 
-    private boolean checkExitTheChatFormat(String senderNick) {
-        return true;
+    public String getMessageBlocRecipients() {
+        return this.messageBlocRecipients;
+    }
+
+    public void setMessageBlocRecipients(String newVal) {
+        this.messageBlocRecipients = newVal;
+    }
+
+    public boolean checkSenderName(String senderName) {
+        return !senderName.isEmpty();
+    }
+
+    public void checkRecipients(Message message) {
+        MessageFactory msgFactory = new MessageFactory();
+        ArrayList<Long> activeUserID = msgFactory.getActiveRecipient(message, this.messageBlocRecipients);
+        msgFactory.connectUserToTalk(message, activeUserID);
     }
 }

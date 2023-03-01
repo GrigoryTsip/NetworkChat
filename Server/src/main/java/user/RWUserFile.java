@@ -7,7 +7,6 @@ import org.json.simple.JSONArray;
 import org.json.simple.JSONObject;
 import org.json.simple.parser.JSONParser;
 import org.json.simple.parser.ParseException;
-import server.IDFactory;
 import server.Settings;
 
 import java.io.BufferedReader;
@@ -16,7 +15,6 @@ import java.io.FileWriter;
 import java.io.IOException;
 import java.util.Collection;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * Класс, выполняющий операции ведения и сохранения справочника пользователей.
@@ -29,14 +27,7 @@ public class RWUserFile {
 
     public static ConcurrentHashMap<String, User> userList = new ConcurrentHashMap<>();
 
-    /**
-     * Вспомогательная константа для использования в
-     * качестве монитора в блоке синхронизации потоков.
-     */
-    private static final Integer monitor = 0;
-
-    protected long maxUserID = 0;
-    private static final String[] userColumnMapping = {"userID", "userNickname", "userName"};
+     private static final String[] userColumnMapping = {"userNickname", "userName"};
 
     private final Settings settings = new Settings();
 
@@ -45,12 +36,12 @@ public class RWUserFile {
 
     /**
      * Метод читает файл справочника участников чата.
-     * Результат представлен строкой данных  json.
+     * Результат представлен строкой данных json.
      */
     public String readUserFile() {
 
         StringBuilder jString = new StringBuilder();
-        String fileName = settings.getPathToFiles() + settings.getListOfUsersFile();
+        String fileName = Settings.getPathToFiles() + settings.getListOfUsersFile();
 
         try (BufferedReader jsonFile = new BufferedReader((new FileReader(fileName)))) {
             String s;
@@ -72,8 +63,7 @@ public class RWUserFile {
      */
     public void formUserList(String jsonString) throws ParseException {
 
-
-        // разбираем строку на объекты классов AboutGoods и Order
+        // разбираем строку на объекты класса User
         JSONParser parser = new JSONParser();
         Object obj = parser.parse(jsonString);
         JSONArray jsonObj = (JSONArray) obj;
@@ -87,25 +77,19 @@ public class RWUserFile {
                 String nick = null;
                 String name = null;
                 switch (attrName) {
-                    case "userID" -> id = classIDValue(attr);
                     case "userNickname" -> nick = attr;
                     case "userName" -> name = attr;
                     default -> throw new IllegalStateException("Unexpected value: " + attrName);
                 }
 
+                User user = new User(nick, name);
                 assert nick != null;
-                userList.put(nick, new User(id, nick, name));
+                userList.put(nick, user);
             }
         }
     }
 
-    protected long classIDValue(String id) {
-        long idUser = Long.parseLong(id);
-        maxUserID = Math.max(maxUserID, idUser);
-        return idUser;
-    }
-
-    public void writeOrderList() {
+    public void writeUserList() {
 
         GsonBuilder builder = new GsonBuilder();
         Gson gson = builder
