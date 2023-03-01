@@ -1,82 +1,78 @@
+//
+// Source code recreated from a .class file by IntelliJ IDEA
+// (powered by FernFlower decompiler)
+//
+
 package talkshow;
 
-
-/**
- * Коды завершения операций в чате.
- * @author gntsi
- * @version 1.0
- * @created 30-янв-2023 16:19:26
- */
 public enum ExitCode {
-	/**
-	 * Операция успешно исполнена
-	 */
-	SUCCESS,
-	/**
-	 * Ошибка инициализации Сервера
-	 */
-	SERVER_NOT_INITIALIZE,
-	/**
-	 * Ошибка инициализации сокета Клиента
-	 */
-	CLIENT_SOCKET_NOT_INITIALIZE,
-	/**
-	 * Неверный формат сообщения
-	 */
-	WRONG_MESSAGE_FORMAT,
-	/**
-	 * Пользователь с таким ником уже зарегистрирован
-	 */
-	NICK_ALREADY_USED,
-	/**
-	 * Для регистрации в чате необходимо указать имя пользователя
-	 */
-	MISSING_USER_NAME,
-	/**
-	 * Для участия в чате необходимо зарегистрироваться
-	 */
-	USER_NOT_REGISTER,
-	/**
-	 * Неверный идентификатор беседы
-	 */
-	FALSE_TALKSHOW_IDENTIFIER,
-	/**
-	 * Пользователи со следующими никами не зарегистрированы в чате:
-	 */
-	USERS_NOT_IN_CHAT,
-	/**
-	 * Пользователи со слудующими никами не активны в чате:
-	 */
-	USERS_NOT_ACTIVE;
+    SUCCESS(0),
+    SERVER_NOT_INITIALIZE(-1),
+    CLIENT_SOCKET_NOT_INITIALIZE(-2),
+    WRONG_MESSAGE_FORMAT(-3),
+    NICK_ALREADY_USED(-4),
+    MISSING_USER_NAME(-5),
+    USER_NOT_REGISTER(-6),
+    USER_NOT_ACTIVE(-7),
+    FALSE_TALKSHOW_IDENTIFIER(-8),
+    USERS_NOT_IN_CHAT(-9),
+    NOT_ACTIVE_USERS(-10),
+    WRONG_RECIPIENTS(-11),
+    SERVER_FAULT(12);
 
-	/**
-	 * По коду возвращает строку сообщения.
-	 * 
-	 * @param code    Код результата операции.
-	 */
-	public String toString(ExitCode code){
-	
-			String s = "";
-			switch (code) {
-				case SUCCESS -> s = "Сервер запущен";
-				case SERVER_NOT_INITIALIZE -> s = "Ошибка инициализации сервера";
-				case CLIENT_SOCKET_NOT_INITIALIZE -> s = "Ошибка инициализации сокета клиента";
-				case WRONG_MESSAGE_FORMAT -> s = "Неверный формат сообщения";
-				case NICK_ALREADY_USED -> s = "Пользователь с таким ником уже зарегистрирован"; 
-				case MISSING_USER_NAME -> s = "Для регистрации в чате необходимо указать имя пользователя";
-				case USER_NOT_REGISTER -> s = "Для участия в чате необходимо зарегистрироваться";
-				case FALSE_TALKSHOW_IDENTIFIER -> s = "Неверный идентификатор беседы";
-				case USERS_NOT_IN_CHAT -> s = "Пользователя со следующими никами не зарегистрированы в чате: ";
-				case USERS_NOT_ACTIVE -> s = "Пользователи со следующими никами не активны в чате: ";
-			}
-			return s;
-	}
+    private final int digitExitCode;
 
-	/**
-	 * 
-	 * @param code    Код результата операции.
-	 */
-	public void resultMessage(ExitCode code){
-		System.out.println(toString(code));
-	}
+    private ExitCode(int i) {
+        this.digitExitCode = i;
+    }
+
+    public static int getDigitExitCode(ExitCode code) {
+        return code.digitExitCode;
+    }
+
+    public static String toString(ExitCode code) {
+        String s = "";
+        switch (code) {
+            case SUCCESS:
+                s = "Операция успешна";
+                break;
+            case SERVER_NOT_INITIALIZE:
+                s = "Ошибка инициализации сервера";
+                break;
+            case CLIENT_SOCKET_NOT_INITIALIZE:
+                s = "Ошибка инициализации сокета клиента";
+                break;
+            case WRONG_MESSAGE_FORMAT:
+                s = "Неверный формат сообщения";
+                break;
+            case NICK_ALREADY_USED:
+                s = "Пользователь с таким ником уже зарегистрирован";
+                break;
+            case MISSING_USER_NAME:
+                s = "Для регистрации в чате необходимо указать имя пользователя";
+                break;
+            case USER_NOT_REGISTER:
+                s = "Для участия в чате необходимо зарегистрироваться";
+                break;
+            case USER_NOT_ACTIVE:
+                s = "Сначала присоединитесь к чату";
+                break;
+            case FALSE_TALKSHOW_IDENTIFIER:
+                s = "Неверный идентификатор беседы";
+                break;
+            case USERS_NOT_IN_CHAT:
+                s = "Пользователи со следующими никами не зарегистрированы в чате: ";
+                break;
+            case NOT_ACTIVE_USERS:
+                s = "Пользователи со следующими никами не активны в чате: ";
+                break;
+            case WRONG_RECIPIENTS:
+                s = "Нет корректно определенных получателей сообщения";
+                break;
+            case SERVER_FAULT:
+                s = "Ошибка сервера. Участник чата не определяем";
+        }
+
+        return s;
+    }
 }

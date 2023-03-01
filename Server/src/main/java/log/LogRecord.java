@@ -2,20 +2,22 @@ package log;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
-import server.IDFactory;
-import server.Settings;
+import server.ThreadService;
+import stringmsg.ParseStringMessage;
 import talkshow.ExitCode;
 import talkshow.Message;
+import talkshow.MessageFactory;
+import talkshow.MessageType;
 
 import java.io.FileWriter;
 import java.io.IOException;
-import java.util.Calendar;
 import java.util.Date;
-import java.util.GregorianCalendar;
 import java.util.concurrent.Callable;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 
-import static server.Server.*;
+import static server.ThreadService.*;
+import static talkshow.MessageType.*;
 
 /**
  * Структура записи лог-файла.
@@ -26,7 +28,8 @@ import static server.Server.*;
  */
 public class LogRecord {
 
-    private long idLogRecord;
+    private String messageType;
+
     /**
      * Дата и время операции.
      */
@@ -42,89 +45,90 @@ public class LogRecord {
     /**
      * Строка с никами получателей. В качестве разделителей используется ведущий @.
      */
-    protected String recipientNick;
+    protected String recipientNicks;
     /**
      * Код завершения операции
      */
-    protected ExitCode codeOfResult;
+    protected String codeOfResult;
+    private String wrongRecipients;
+    private String notActiveRecipients;
 
-    public OperationType operationType;
+    private ParseStringMessage parseStrMsg;
+
 
     public LogRecord() {
-        IDFactory idFactory = new IDFactory();
-        this.idLogRecord = idFactory.buildID(this);
+    }
+
+    public LogRecord(ParseStringMessage psm) {
+        //связываем формируемую запись в логе с исходным сообщением
+        this.parseStrMsg = psm;
     }
 
     /**
      * Запись о запуске сервера содержит только дату и тип операции START_SERVER.
      * Остальные поля пусты.
-     *
-     * @param oper     Тип операции
-     * @param message  Сообщение, инициировавшее операцию, или null
-     * @param exitCode Код завершения операции
      */
-    public void formLogRecord(OperationType oper, Message message, ExitCode exitCode) throws InterruptedException {
+    public void formLogRecord() throws InterruptedException, ExecutionException {
 
-        Callable<Message> inLog = () -> {
-            LogRecord logRecord;
-            switch (oper) {
-                case START_SERVER -> {
-                    ServerStart serverStart = new ServerStart();
-                    serverStart.setData();
-                    serverStart.setCodeOfResult(exitCode);
-                    logRecord = serverStart;
-                }
-                case REGISTRATION -> {
-                    Registration registration = new Registration();
-                    registration.setData();
-                    registration.setSenderNick(stringMessageList
-                            .get(message.getIDStringMessage()));
-                    registration.setCodeOfResult(exitCode);
-                    logRecord = registration;
-                }
-                case CONNECTION -> {
-                    Connection connection = new Connection();
-                    connection.setData();
-                    connection.setSenderNick();
-                    connection.setCodeOfResult(exitCode);
-                    logRecord = connection;
-                }
-                case RECEIVE_MESSAGE -> {
-                    ReceiveMessage inMessage = new ReceiveMessage();
-                    inMessage.setData();
-
-                }
-                case SEND_MESSAGE -> {
-                }
-                case EXIT_CHAT -> {
-                    ExitChat exitChat = new ExitChat();
-                    exitChat.setData();
-                    exitChat.setSenderNick();
-                    exitChat.setCodeOfResult(exitCode);
-                    logRecord = exitChat;
-                }
-                default -> throw new IllegalStateException("Unexpected value: " + oper);
-            }
-            writeLogRecord(logRecord);
-            return null;
+        Callable<LogRecord> inLog = () -> {
+            Message message = prepareMessagesLog.take();
+            return getLogRecord(message);
         };
 
-        Future<Message> task = threadPool.submit(inLog);
+        ThreadService threadSevice = new ThreadService();
+        Future<LogRecord> task = threadPool.submit(inLog);
         sendLogTask.put(task);
+        threadSevice.controlLogTask();
     }
 
-    /**
-     * Лог-файл представляет собой файл формата json с записями, соответствующими логированным операциям чата.
-     * Метод открывает файл для дописывания записей в конец файла.
-     */
-    public FileWriter openLogFile(String path, String name) {
+    public LogRecord getLogRecord(Message message) {
+        MessageFactory msgFactory = new MessageFactory();
+        MessageType type = message.getType();
+        LogRecord logRecord = new LogRecord();
 
-        try (FileWriter file = new FileWriter(path + name, true)) {
-            return file;
-        } catch (IOException e) {
-            e.printStackTrace();
+        logRecord.setMessageType(type);
+        logRecord.setData(message.getDataOfMessage());
+
+        if (type != START_SERVER) {
+            logRecord.setSenderNick(msgFactory.getSenderNick(message.getSenderID()));
+            logRecord.setParseStrMsg(msgFactory.getParseStringMessage(message.getIDStringMessage()));
+            this.recipientNicks = recipientsList(logRecord.parseStrMsg.getRecipients());
+
+            if (type == RECEIVED_MESSAGE) {
+                logRecord.setRecipientNick(this.getRecipientNick());
+                logRecord.setWrongRecipients(message.getUserNotInChat());
+                logRecord.setNotActiveRecipients(message.getUsersNotActive());
+            } else {
+                logRecord.setWrongRecipients(null);
+                logRecord.setNotActiveRecipients(null);
+                if (message.getType() == SEND_MESSAGE) {
+                    msgFactory.getActiveRecipient(message,
+                            logRecord.parseStrMsg.getMessageBlocRecipients());
+                    logRecord.recipientNicks = logRecord.parseStrMsg.getMessageBlocRecipients();
+                } else {
+                    logRecord.setRecipientNick(null);
+                }
+            }
+            logRecord.setMessageBody(message.getBody());
         }
-        return null;
+
+        ExitCode exitCode = message.getResult();
+        logRecord.setCodeOfResult(ExitCode.toString(exitCode));
+
+        logRecord.parseStrMsg = null;
+        writeLogRecord(logRecord);
+        return logRecord;
+    }
+
+
+    private String recipientsList(String[] recipients) {
+        if (recipients == null || recipients.length == 0) return null;
+
+        StringBuilder rcp = new StringBuilder(recipients[0].trim());
+        for (int i = 1; i < recipients.length; i++) {
+            rcp.append(";").append(recipients[i].trim());
+        }
+        return rcp.toString();
     }
 
     /**
@@ -135,25 +139,17 @@ public class LogRecord {
      */
     public void writeLogRecord(LogRecord record) {
 
-        Settings file = new Settings();
-
         GsonBuilder builder = new GsonBuilder();
         Gson gson = builder
                 .setPrettyPrinting()
+                .setDateFormat("dd-MM-yyyy HH:mm:ss")
                 .create();
-        try {
-            file.getReferenceToLogFile().write(gson.toJson(record));
+        String fileName = "Server/src/main/resources/logfile.json"; // getPathToFiles() + "logfile.json";
+        try (FileWriter logfile = new FileWriter(fileName, true)) {
+            logfile.write(gson.toJson(record));
         } catch (IOException e) {
             e.printStackTrace();
         }
-
-    }
-
-    /**
-     * Тип операции.
-     */
-    public OperationType getOperationType() {
-        return operationType;
     }
 
     /**
@@ -163,11 +159,8 @@ public class LogRecord {
         return data;
     }
 
-    /**
-     * Дата и время операции.
-     */
-    public void setData() {
-        this.data = new GregorianCalendar().getTime();
+    public void setData(Date newVal) {
+        data = newVal;
     }
 
     /**
@@ -177,11 +170,8 @@ public class LogRecord {
         return senderNick;
     }
 
-    /**
-     * Ник отправителя сообщения.
-     */
     public void setSenderNick(String newVal) {
-        this.senderNick = newVal;
+        senderNick = newVal;
     }
 
     /**
@@ -191,9 +181,6 @@ public class LogRecord {
         return messageBody;
     }
 
-    /**
-     * Тело сообщения.
-     */
     public void setMessageBody(String newVal) {
         messageBody = newVal;
     }
@@ -202,28 +189,53 @@ public class LogRecord {
      * Строка с никами получателей. В качестве разделителей используется ведущий @.
      */
     public String getRecipientNick() {
-        return recipientNick;
+        return recipientNicks;
     }
 
-    /**
-     * Строка с никами получателей. В качестве разделителей используется ведущий @.
-     */
     public void setRecipientNick(String newVal) {
-        recipientNick = newVal;
+        recipientNicks = newVal;
     }
 
     /**
      * Код завершения операции
      */
-    public ExitCode getCodeOfResult() {
+    public String getCodeOfResult() {
         return codeOfResult;
     }
 
-    /**
-     * Код завершения операции
-     */
-    public void setCodeOfResult(ExitCode newVal) {
+    public void setCodeOfResult(String newVal) {
         codeOfResult = newVal;
     }
 
+    public String getMessageType() {
+        return messageType;
+    }
+
+    public void setMessageType(MessageType newVal) {
+        messageType = String.valueOf(newVal.toString(newVal));
+    }
+
+    public String getWrongRecipients() {
+        return wrongRecipients;
+    }
+
+    public void setWrongRecipients(String newVal) {
+        wrongRecipients = newVal;
+    }
+
+    public String getNotActiveRecipients() {
+        return notActiveRecipients;
+    }
+
+    public void setNotActiveRecipients(String newVal) {
+        notActiveRecipients = newVal;
+    }
+
+    public ParseStringMessage getParseStrMsg() {
+        return parseStrMsg;
+    }
+
+    public void setParseStrMsg(ParseStringMessage newVal) {
+        this.parseStrMsg = newVal;
+    }
 }
