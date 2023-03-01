@@ -1,54 +1,36 @@
-package talkshow;
+//
+// Source code recreated from a .class file by IntelliJ IDEA
+// (powered by FernFlower decompiler)
+//
 
+package talkshow;
 
 import server.IDFactory;
 import user.User;
 
-import java.lang.reflect.AnnotatedType;
 import java.util.Date;
-import java.util.concurrent.atomic.AtomicLong;
+import java.util.GregorianCalendar;
+import java.util.concurrent.ConcurrentHashMap;
 
-/**
- * Сеанс взаимодействия нескольких участников чата (беседа).
- *
- * @author gntsi
- * @version 1.0
- * @created 30-янв-2023 16:19:27
- */
 public class TalkShow {
-
-    /**
-     * Уникальный идентификатор беседы (talkshow).
-     */
     private long idTalkShow;
-    /**
-     * Дата и время начала беседы.
-     */
-    private Date dataStartOfTalk;
-    /**
-     * Дата и время окончания беседы.
-     */
-    private Date dataEndOfTalk;
-    /**
-     * Признак активности беседы:
-     * true - активна
-     * false - не активна.
-     */
+    private Date dataStartOfTalk = new Date();
+    private Date dataEndOfTalk = new Date();
     private boolean isActive;
+    private String ownerNick;
+    public static ConcurrentHashMap<String, TalkShow> talkShowList = new ConcurrentHashMap<>();
 
-    /**
-     * Конструктор, осуществляющий начальную инициацию счетчика
-     * идентификаторов объектов (begin = true), и установку идентификатора
-     * создаваемого объекта (begin = false).
-     */
-    public TalkShow(User user) {
-        IDFactory idFactory = new IDFactory();
-        this.idTalkShow = idFactory.buildID((Object) this);
+    public TalkShow() {
     }
 
-    /**
-     * Признак активности беседы:
-     */
+    public TalkShow(User user) {
+        IDFactory idFactory = new IDFactory();
+        this.idTalkShow = idFactory.buildID(this);
+        this.dataStartOfTalk = (new GregorianCalendar()).getTime();
+        this.ownerNick = user.getNickName();
+        talkShowList.put(this.ownerNick, this);
+    }
+
     public boolean isActive() {
         return this.isActive;
     }
@@ -57,16 +39,10 @@ public class TalkShow {
         this.isActive = newVal;
     }
 
-    /**
-     * Уникальный идентификатор беседы (talkshow).
-     */
     public long getIDTalkShow() {
         return this.idTalkShow;
     }
 
-    /**
-     * Дата и время начала беседы.
-     */
     public Date getDataStartOfTalk() {
         return this.dataStartOfTalk;
     }
@@ -75,9 +51,6 @@ public class TalkShow {
         this.dataStartOfTalk = newVal;
     }
 
-    /**
-     * Дата и время окончания беседы.
-     */
     public Date getDataEndOfTalk() {
         return this.dataEndOfTalk;
     }
@@ -86,4 +59,11 @@ public class TalkShow {
         this.dataEndOfTalk = newVal;
     }
 
+    public String getOwnerNick() {
+        return this.ownerNick;
+    }
+
+    public void setOwnerNick(String newVal) {
+        this.ownerNick = newVal;
+    }
 }

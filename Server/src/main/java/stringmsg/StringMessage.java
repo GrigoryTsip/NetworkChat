@@ -1,14 +1,13 @@
 package stringmsg;
 
 import server.IDFactory;
+import server.ThreadService;
 import talkshow.Message;
 
-import java.io.BufferedReader;
-import java.io.PrintWriter;
 import java.net.Socket;
 import java.util.concurrent.*;
 
-import static server.Server.*;
+import static server.ThreadService.*;
 
 /**
  * Класс представляющий получаемое или отправляемое сообщение.
@@ -70,13 +69,14 @@ public class StringMessage {
      * Конструктор класса. Принимает необработанное сообщение в виде строки для
      * дальнейшей обработки.
      *
-     * @param message Полученное сообщение в необработанном виде
+     * @param message    Полученное сообщение в необработанном виде
+     * @param userSocket Ссылка на сокет участника чата
      */
-
-    public StringMessage(String message) {
+    public StringMessage(String message, Socket userSocket) {
         IDFactory idFactory = new IDFactory();
         this.stringMessageID = idFactory.buildID(this);
         this.message = message;
+        this.userSocket = userSocket;
     }
 
     /**
@@ -111,57 +111,21 @@ public class StringMessage {
         return this.stringMessageID;
     }
 
-    /**
-     * Конструктор класса. Принимает необработанное сообщение в виде строки для
-     * дальнейшей обработки.
-     *
-     * @param message Полученное сообщение в необработанном виде
-     * @param userSocket      Ссылка на сокет участника чата
-     */
-    public StringMessage(String message, Socket userSocket) {
-        IDFactory idFactory = new IDFactory();
-        this.stringMessageID = idFactory.buildID(this);
-        this.message = message;
-        this.userSocket = userSocket;
-    }
 
     public void takeStringMessage() throws InterruptedException, ExecutionException {
 
         Callable<Message> stringParse = () -> {
 
-            IDFactory idFactory = new IDFactory();
-
-            ParseStringMessage parseStringMessage = new ParseStringMessage();
             StringMessage curMessage = stringMessages.take();
-            idFactory.objectConnection(
-                    parseStringMessage.getIDParseStringMessage(),
-                    curMessage.getStringMessageID());
+            ParseStringMessage parseStringMessage =
+                    new ParseStringMessage(curMessage);
             return parseStringMessage.parseMessage(curMessage);
         };
 
-        ArrayBlockingQueue<Future<StringMessage>> removableTask = new ArrayBlockingQueue<>(ABQ_CAPACITY);
-        while (!readMessageTask.isEmpty()) {
-            for (Future<StringMessage> taskReadMessage : readMessageTask) {
-                if (taskReadMessage.isDone()) {
-                    removableTask.put(taskReadMessage);
+        ThreadService threadSevice = new ThreadService();
 
-                    stringMessages.put(taskReadMessage.get());
-                    taskReadMessage.cancel(true);
-                }
-            }
-
-            while (!removableTask.isEmpty()) {
-                Future<StringMessage> task = removableTask.take();
-                readMessageTask.remove(task);
-                task.cancel(true);
-
-                Future<Message> taskParseMessage = threadPool.submit(stringParse);
-                parseMessageTask.put(taskParseMessage);
-            }
-        }
-    }
-
-    public void buildSendMessage() {
-
+        Future<Message> taskParseMessage = threadPool.submit(stringParse);
+        parseMessageTask.put(taskParseMessage);
+        threadSevice.controlPrepareTask();
     }
 }
