@@ -1,80 +1,66 @@
+//
+// Source code recreated from a .class file by IntelliJ IDEA
+// (powered by FernFlower decompiler)
+//
+
 package stringmsg;
 
 import server.IDFactory;
-import talkshow.ExitCode;
-import talkshow.Message;
-import talkshow.MessageType;
-import talkshow.TalkShow;
+import talkshow.*;
 import user.ActiveUser;
+import user.RWUserFile;
 import user.User;
 
-import static talkshow.ExitCode.*;
-import static talkshow.ExitCode.SUCCESS;
-import static user.RWUserFile.userList;
+import java.util.ArrayList;
 
-/**
- * Класс для осуществления корректного присоединения (коннекта) участника чата к
- * беседе.
- *
- * @author gntsi
- * @version 1.0
- * @created 04-фев-2023 8:54:17
- */
 public class ChatConnection extends ParseStringMessage {
+    private StringMessage currentMessage = new StringMessage();
 
-    public ChatConnection() throws InterruptedException {
+    public ChatConnection(ParseStringMessage m) {
+        this.senderNick = m.getSenderNick();
+        IDFactory idFactory = new IDFactory();
+        ArrayList<Object> arr = idFactory.getRelatedObjects(StringMessage.class, m.getIDParseStringMessage());
+        this.currentMessage = (StringMessage)arr.get(0);
     }
 
-    /**
-     * Проверка корректности сообщения с запросом о коннекте.
-     * В случае отсутствия ошибок, присоединение участника чата к беседе
-     * (если она есть) или создание беседы.
-     * На входе предварительно сформированный объект входящего сообщения
-     * с заполненными полями:
-     * dataOfMessage
-     * idStringMessage
-     * body.
-     */
-    public Message senderConnection(Message inMessage, StringMessage currentMessage) {
-
+    public Message senderConnection(Message inMessage) {
         ExitCode exitCode;
-
-        if (checkSenderNick(senderNick)) {
-            exitCode = WRONG_MESSAGE_FORMAT;
+        if (!this.checkSenderNick(this.senderNick)) {
+            exitCode = ExitCode.WRONG_MESSAGE_FORMAT;
+        } else if (!RWUserFile.userList.containsKey(this.senderNick)) {
+            exitCode = ExitCode.USER_NOT_REGISTER;
         } else {
-            if (!userList.containsKey(senderNick)) {
-                exitCode = USER_NOT_REGISTER;
-            } else exitCode = SUCCESS;
+            exitCode = ExitCode.SUCCESS;
         }
-        User user;
-        ActiveUser activeUser;
+
         IDFactory idFactory = new IDFactory();
-        if (exitCode == SUCCESS) {
-            user = userList.get(senderNick);
-            activeUser = (ActiveUser) idFactory.getObject(user.getID());
-            if (activeUser == null) activeUser = new ActiveUser(user);
+        User user;
+        if (exitCode == ExitCode.SUCCESS) {
+            user = (User)RWUserFile.userList.get(this.senderNick);
+            ActiveUser activeUser = (ActiveUser)ActiveUser.activeUserList.get(this.currentMessage.getUserSocket());
+            if (activeUser != null) {
+                activeUser.setUserID(user.getID());
+                idFactory.objectConnection(activeUser.getID(), user.getID());
+                activeUser.setCondition(true);
+                activeUser.setUserSocket(this.currentMessage.getUserSocket());
+                TalkShow talk = new TalkShow(user);
+                new UserInTalk(user, talk);
+            } else {
+                exitCode = ExitCode.SERVER_FAULT;
+                System.out.println(ExitCode.toString(exitCode));
+            }
+        } else {
+            user = null;
+        }
 
-            activeUser.setCondition(true);
-            activeUser.setUserSocket(currentMessage.getUserSocket());
+        if (user != null) {
+            inMessage.setSenderID(user.getID());
+        } else {
+            inMessage.setSenderID(0L);
+        }
 
-            TalkShow talk = new TalkShow(user);
-
-        } else user = null;
-
-        if (user != null) inMessage.setSenderID(user.getID());
-        else inMessage.setSenderID(0);
-
-        inMessage.setType(MessageType.CHAT_REGISTRATION);
+        inMessage.setType(MessageType.CHAT_CONNECTION);
         inMessage.setResult(exitCode);
-
         return inMessage;
     }
-
-    /**
-     *
-     */
-    public Message formResultConnectionMessage(Message inMessage) {
-        return null;
-    }
-
 }

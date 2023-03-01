@@ -1,74 +1,58 @@
+//
+// Source code recreated from a .class file by IntelliJ IDEA
+// (powered by FernFlower decompiler)
+//
+
 package stringmsg;
 
+import server.IDFactory;
 import talkshow.ExitCode;
 import talkshow.Message;
-import talkshow.MessageType;
+import talkshow.MessageFactory;
+import user.RWUserFile;
 import user.User;
 
-import static talkshow.ExitCode.*;
-import static talkshow.ExitCode.SUCCESS;
-import static user.RWUserFile.userList;
+import java.net.Socket;
+import java.util.ArrayList;
 
-/**
- *  ласс дл€ осуществлени€ корректной регистрации участника чата.
- *
- * @author gntsi
- * @version 1.0
- * @created 03-фев-2023 19:26:21
- */
 public class ChatRegistration extends ParseStringMessage {
+    private final String senderName;
+    private Socket socket;
 
-
-    public ChatRegistration() throws InterruptedException {
+    public ChatRegistration(ParseStringMessage m) {
+        this.senderNick = m.getSenderNick();
+        this.senderName = m.getMessageBody();
+        IDFactory idFactory = new IDFactory();
+        StringMessage currentMessage = new StringMessage();
+        ArrayList<Object> arr = idFactory.getRelatedObjects(StringMessage.class, m.getIDParseStringMessage());
+        currentMessage = (StringMessage)arr.get(0);
+        this.socket = currentMessage.getUserSocket();
     }
 
-    /**
-     * ѕроверка корректности сообщени€ с запросом о регистрации.
-     * в случае отсутстви€ ошибок, регистраци€ участника чата.
-     */
     public Message senderRegistration(Message mesg) {
-
+        new MessageFactory();
         ExitCode exitCode;
-
-        if (checkSenderNick(senderNick)) {
-            exitCode = WRONG_MESSAGE_FORMAT;
+        if (!this.checkSenderNick(this.senderNick)) {
+            exitCode = ExitCode.WRONG_MESSAGE_FORMAT;
+        } else if (RWUserFile.userList.containsKey(this.senderNick)) {
+            exitCode = ExitCode.NICK_ALREADY_USED;
+        } else if (!this.checkSenderName(this.senderName)) {
+            exitCode = ExitCode.MISSING_USER_NAME;
         } else {
-            if (userList.containsKey(senderNick)) {
-                exitCode = NICK_ALREADY_USED;
-            } else {
-                if (checkSenderName(messageBody)) {
-                    exitCode = MISSING_USER_NAME;
-                } else exitCode = SUCCESS;
-            }
+            exitCode = ExitCode.SUCCESS;
         }
-        User user;
-        switch (exitCode) {
-            case SUCCESS -> {
-                user = new User();
-                user.setNickName(senderNick);
-                user.setName(messageBody);
-                userList.put(senderNick, user);
-            }
-            case NICK_ALREADY_USED -> user = userList.get(senderNick);
-            case MISSING_USER_NAME -> user = null;
-            case WRONG_MESSAGE_FORMAT -> user = null;
-            default -> user = null;
-        }
-        if (user != null) mesg.setSenderID(user.getID());
-        else mesg.setSenderID(0);
 
-        mesg.setType(MessageType.CHAT_REGISTRATION);
-        mesg.setResult(exitCode);
+        if (exitCode == ExitCode.SUCCESS) {
+            User user = new User(this.socket);
+            user.setNickName(this.senderNick);
+            user.setName(this.senderName);
+            RWUserFile.userList.put(this.senderNick, user);
+            mesg.setSenderID(user.getID());
+        }
+
+        MessageFactory msgFactory = new MessageFactory();
+        msgFactory.setResult(mesg, exitCode);
+        msgFactory.setBody(mesg, this.senderName);
         return mesg;
     }
-
-    /**
-     * ‘ормирование ответного сообщени€ как об ошибке в формате сообщени€, так и
-     * успешной регистрации или коннекте.
-     */
-    public Message formResultRegistrationMessage() {
-
-        return null;
-    }
-
 }
